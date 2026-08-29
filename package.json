@@ -1,11 +1,15 @@
 {
   "name": "@itz4blitz/oc-loop",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "private": false,
   "type": "module",
   "license": "MIT",
   "description": "Safe autonomous loop/workflow plugin for OpenCode 2: admission-gated dispatch, durable event-sourced state, command/approval/condition nodes, templates.",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=22",
     "opencode": ">=0.0.0-beta-18155"
