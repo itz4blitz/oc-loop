@@ -1,3 +1,4 @@
+import { parseLoopArgs } from "../domain/commands.js"
 import type { DomainAction } from "../domain/reducer.js"
 import type { TriggerEvent } from "../domain/triggers.js"
 import { loadState, type EventStore } from "../persistence/memory.js"
@@ -64,6 +65,12 @@ export type LoopCommandPorts = {
   host: { inspect(sessionId: string): Promise<{ host: string; statusReadSucceeded: boolean }> }
   nowMs: () => number
   ids: () => { workflowId: string; nodeId: string }
+}
+
+export async function executeLoopCommand(text: string, sessionId: string, ports: LoopCommandPorts): Promise<string> {
+  const parsed = parseLoopArgs(text.trim() ? text.trim().split(/\s+/u) : [])
+  if (!parsed.ok) return parsed.message
+  return executeLoopIntent(parsed.intent, sessionId, ports)
 }
 
 export function nowEvent(trigger: Workflow["trigger"], nowMs: number): TriggerEvent {

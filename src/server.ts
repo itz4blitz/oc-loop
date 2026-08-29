@@ -1,6 +1,6 @@
 import { Plugin } from "@opencode-ai/plugin"
 import { randomUUID } from "node:crypto"
-import { executeLoopIntent } from "./app/commands.js"
+import { executeLoopCommand, executeLoopIntent } from "./app/commands.js"
 import { loopRoot, matchingIdleWorkflows, startClock } from "./app/loop.js"
 import { toolToIntent, type ToolInput } from "./app/tool.js"
 import { createOpenCodeHost } from "./host/opencode.js"
@@ -85,6 +85,34 @@ export default Plugin.define({
         },
       })
     })
-    return async () => { events.abort(); clock.stop(); await toolRegistration.dispose() }
+    // Slash commands are palette sugar with an instant, structured synthetic
+    // reply — the engine runs server-side, no model round-trip.
+    const commandRegistration = await context.command.transform((draft) => {
+      const add = (name: string, description: string, args: string) => {
+        draft.add({
+          name,
+          description,
+          execute: async ({ sessionID, prompt }) => {
+            const parts = [args, prompt.text].filter(Boolean).join(" ")
+            const text = await executeLoopCommand(parts, sessionID, ports)
+            await context.session.synthetic({ sessionID, text })
+          },
+        })
+      }
+      add("loop", "Create and control autonomous loops — /loop help for the full surface", "")
+      add("loop-list", "List loops in this project", "list")
+      add("loop-now", "Force a loop dispatch now: /loop-now <id>", "now")
+      add("loop-template", "Clone a loop template: /loop-template [continuation|test-fix|review|watch]", "template")
+      add("loop-doctor", "Diagnose loops: /loop-doctor [id]", "doctor")
+      add("loop-pause", "Pause a loop: /loop-pause <id>", "pause")
+      add("loop-resume", "Resume a paused loop: /loop-resume <id>", "resume")
+      add("loop-stop", "Stop a loop permanently: /loop-stop <id>", "stop")
+      add("loop-show", "Show a loop's status: /loop-show <id>", "show")
+      add("loop-logs", "Show a loop's raw event log: /loop-logs <id>", "logs")
+      add("loop-timeline", "Show a loop's event timeline: /loop-timeline <id>", "timeline")
+      add("loop-export", "Export all loops as JSON", "export")
+      add("loop-import", "Import loops from JSON: /loop-import <json>", "import")
+    })
+    return async () => { events.abort(); clock.stop(); await toolRegistration.dispose(); await commandRegistration.dispose() }
   },
 })
