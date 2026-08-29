@@ -1,58 +1,120 @@
+<div align="center">
+
 # oc-loop
 
-A safe autonomous loop/workflow plugin for **OpenCode 2**, registered as an `oc_loop` agent tool. Loops are durable, event-sourced jobs with triggers, admission gating, budgets, and an audit trail — never an unsafe "keep pinging the model" loop.
+**Safe autonomous loops for OpenCode 2.**
 
-## Install (local dev)
+Durable, event-sourced workflow loops with fail-closed admission, budgets, and a full audit trail — registered as an `oc_loop` agent tool your model drives.
+
+[![CI](https://github.com/itz4blitz/oc-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/itz4blitz/oc-loop/actions/workflows/ci.yml)
+[![Mutation](https://img.shields.io/badge/mutation-100%25%20(0%20survived)-brightgreen)](stryker.config.mjs)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](vitest.config.ts)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+</div>
+
+---
+
+Loops are how you get an agent to keep working: *fix the tests, review the diff, watch the logs, continue the task.* The hard part isn't starting the loop — it's stopping it from misfiring. `oc-loop` is the engine that makes loops safe:
+
+- **Fail-closed admission** — a run dispatches only when the host is verified idle with no active tool, busy child, foreground turn, or lease. Anything unknown blocks.
+- **No overlap, no runaway** — one in-flight run per loop, a 30s dispatch floor between runs, and hard `maxRuns` / `maxFailures` / `maxRuntimeMs` budgets.
+- **Durable and crash-safe** — fsync'd atomic writes, exclusive per-stream locks, compare-and-set appends. If the server dies mid-run, the run is marked `unknown` and never silently retried.
+- **Auditable** — every state change is an event in a per-loop stream; `timeline` and `doctor` render it.
+
+## Quick start
+
+**Requirements:** Node ≥ 22, OpenCode ≥ `0.0.0-beta-18155`.
+
+```sh
+git clone https://github.com/itz4blitz/oc-loop.git
+cd oc-loop && npm install && npm run build
+```
+
+Register the built entry in `~/.config/opencode/opencode.json`:
 
 ```json
-// ~/.config/opencode/opencode.json → "plugins"
-"/home/blitz/Development/itz4blitz/oc-loop"
+{
+  "plugins": [
+    "/path/to/oc-loop/dist/src/server.js"
+  ]
+}
 ```
 
-Restart OpenCode. The plugin registers:
+Restart OpenCode and ask:
 
-- the **`oc_loop` tool** (list, create, now, pause, resume, stop, show, logs, timeline, doctor, template, set, export, import)
-- an **idle + clock trigger source** per session (idle-boundary and 1s clock ticks)
+> *Create a loop that keeps the tests green.*
+> *List my loops.*
+> *Run the test-fix loop now.*
 
-## Usage
+The model calls the **`oc_loop`** tool — you get structured results, not prompt spam.
 
-Ask the agent — the model calls `oc_loop`:
+> State lives per project under `.opencode/itz4blitz/oc-loop/` (`catalog.json`, event `streams/`, `snapshots/`). Override with `OC_LOOP_ROOT`.
+
+## The `oc_loop` tool
+
+One tool, 15 actions:
+
+| Action | Does |
+|---|---|
+| `create` | New loop — prompt, session/worktree binding, optional template |
+| `list` · `show` · `logs` · `timeline` | Inspect loops and their audit trails |
+| `now` | Force one dispatch immediately |
+| `pause` · `resume` · `stop` | Lifecycle: park, continue, terminate |
+| `doctor` | Diagnose a loop — status, trigger cursor, host health, dispatch rate |
+| `template` | Clone a template: `continuation`, `test-fix`, `review`, `watch` |
+| `set` | Update fields: name, prompt, trigger kind and params, budgets, permissions |
+| `export` · `import` | Versioned JSON transfer; import never overwrites existing ids |
+
+## Triggers and nodes
+
+| Trigger | Fires |
+|---|---|
+| `idle` | When the host reports an idle boundary |
+| `manual` | Only on explicit `now` |
+| `once` | At/after `atMs`, exactly once |
+| `interval` | Every `everyMs`; missed periods coalesce |
+
+| Node kind | Behavior |
+|---|---|
+| `prompt` | Sends a prompt to the bound session |
+| `command` | Runs a shell verification (default timeout 10 min) — gates on exit code |
+| `condition` | Runs a command, dispatches `passPrompt` or `failPrompt` on the result |
+| `approval` | Parks the loop until explicitly resumed |
+
+Templates give you a starting point: **continuation** (idle, keep going), **test-fix** (condition node gated on `pnpm test`), **review**, **watch** (60s interval).
+
+## Safety guarantees
+
+- **Fail-closed admission** — dispatch requires verified idle host; unknown/failed status reads block. Duplicate-prompt protection via idempotency keys.
+- **Dispatch floor** — 30s minimum between dispatches per loop; rapid-fire triggers block with `dispatch-floor` (visible in timeline + doctor).
+- **Budgets** — `run-budget` and `failure-budget` blocks when `maxRuns` / `maxFailures` are hit.
+- **No overlap** — per-loop event processing is serialized; triggers coalesce while work is pending.
+- **Orphan recovery** — a server crash mid-run marks the run `unknown`; it is never retried without explicit reconciliation.
+- **Crash-safe persistence** — temp file → fsync → atomic rename; `O_EXCL` lock files serialize appends; expected-sequence CAS on streams; `0600` files in `0700` dirs.
+- **Self-validating store** — schema-validated appends and replays, strict sequence continuity, corrupt input throws instead of corrupting state.
+
+## Quality gates
+
+CI runs five gates on every push:
 
 ```text
-/loop create Fix the failing tests
-/loop list
-/loop now <id>          force one dispatch
-/loop pause <id>        park it (resumable)
-/loop stop <id>         terminal
-/loop doctor [id]       diagnostics
-/loop timeline <id>     event audit trail
-/loop template watch    clone the 60s watch-and-respond template
-/loop set <id> --every-ms 30000
+typecheck (tsc --noEmit, strict)
+tests      (173, vitest)
+coverage   (100% lines / statements / functions / branches — hard bar)
+mutation   (Stryker, ~1,500 mutants, 0 survivors — break threshold 100)
+smoke      (live-artifact: built plugin driven end-to-end in isolation)
 ```
 
-## Guarantees
-
-- **Fail-closed admission**: dispatch requires an observed idle host, no active tool, no busy child, no foreground turn, no active lease. Unknown status blocks.
-- **No overlap**: one in-flight run per loop; `steer` never interrupts; delivery is queued.
-- **Budgets**: `maxRuns`, `maxRuntimeMs`, `maxFailures` are enforced per loop.
-- **Dispatch floor**: a loop cannot re-dispatch within 30s; rapid-fire blocks surface as `dispatch-floor` in the timeline and doctor.
-- **Durable state**: fsync'd atomic writes, per-stream locks, compare-and-set appends, snapshot-aware replay.
-- **Crash recovery**: runs persisted `running` when the server dies become `unknown` and are never retried automatically.
-
-## State
-
-- Catalog: `<project>/.opencode/itz4blitz/oc-loop/catalog.json`
-- Event streams: `<project>/.opencode/itz4blitz/oc-loop/streams/`
-- Snapshots: `<project>/.opencode/itz4blitz/oc-loop/snapshots/`
-
-Override the root with `OC_LOOP_ROOT` (useful for tests).
+`prepublishOnly` re-runs all of them plus the build.
 
 ## Docs
 
-- [Architecture](./ARCHITECTURE.md) — design and entity model
-- [Plan](./PLAN.md) — phased implementation plan and acceptance criteria
-- [Coordination](./COORDINATION.md) — multi-session working agreement (delete when solo)
+- [Architecture](ARCHITECTURE.md) — entity model and design decisions
+- [Plan](PLAN.md) — phased plan and acceptance criteria
+- [Research](RESEARCH.md) — OpenCode 2 beta capability findings
+- [Coordination](COORDINATION.md) — multi-session working agreement
 
-## Quality bar
+## License
 
-100% line/statement/function/branch coverage on domain, persistence, scheduler, host, and app layers; **zero surviving Stryker mutants** with a 100% break threshold; live-artifact smoke test (`npm run smoke`) wired into `prepublishOnly`.
+[MIT](LICENSE)
