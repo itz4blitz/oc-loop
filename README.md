@@ -50,6 +50,25 @@ The model calls the **`oc_loop`** tool — you get structured results, not promp
 
 > State lives per project under `.opencode/itz4blitz/oc-loop/` (`catalog.json`, event `streams/`, `snapshots/`). Override with `OC_LOOP_ROOT`.
 
+## Slash commands
+
+Every action also has a palette command with an instant synthetic reply (server-side, no model round-trip):
+
+| Command | Does |
+|---|---|
+| `/loop` | Create an idle loop bound to the current session (`/loop <prompt>`, `--session <id>`, `--worktree <path>`) |
+| `/loop-list` | List loops in this project |
+| `/loop-now <id>` | Force one dispatch immediately |
+| `/loop-pause <id>` · `/loop-resume <id>` | Park / continue a loop |
+| `/loop-stop <id>` | Terminate a loop |
+| `/loop-show <id>` | Status and event count |
+| `/loop-logs <id>` | Raw event log |
+| `/loop-timeline <id>` | Rendered event timeline |
+| `/loop-doctor [id]` | Diagnose one loop or all |
+| `/loop-template [name] [--worktree <path>]` | Clone `continuation`, `test-fix`, `review`, or `watch` |
+| `/loop-export` | Export all loops as JSON |
+| `/loop-import <json>` | Import loops (skips existing ids) |
+
 ## The `oc_loop` tool
 
 One tool, 15 actions:
