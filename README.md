@@ -30,16 +30,15 @@ Loops are how you get an agent to keep working: *fix the tests, review the diff,
 git clone https://github.com/itz4blitz/oc-loop.git
 cd oc-loop && npm install && npm run build
 ```
-
 Register the built entry in `~/.config/opencode/opencode.json`:
 
 ```json
 {
-  "plugins": [
-    "/path/to/oc-loop/dist/src/server.js"
-  ]
+  "plugins": ["@itz4blitz/oc-loop"]
 }
 ```
+
+**npm install:** `npm install -g @itz4blitz/oc-loop` (or build from source: `npm install && npm run build`, then register by path `"/path/to/oc-loop/dist/src/server.js"`).
 
 Restart OpenCode and ask:
 

@@ -1,5 +1,5 @@
 {
-  "name": "oc-loop",
+  "name": "@itz4blitz/oc-loop",
   "version": "0.1.0-beta.1",
   "private": false,
   "type": "module",
@@ -21,8 +21,9 @@
     "test:mutation": "stryker run",
     "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke.mjs",
+    "clean": "rm -rf dist",
     "prepublishOnly": "npm run typecheck && npm test && npm run smoke && npm run build",
-    "build": "tsc --outDir dist --declaration false --noEmit false"
+    "build": "npm run clean && tsc --outDir dist --declaration false --noEmit false"
   },
   "dependencies": {
     "@opencode-ai/plugin": "0.0.0-beta-18155",
